@@ -9,8 +9,24 @@
 
 library(shiny)
 library(plotly)
-library(leaflet)
 library(dplyr)
+library(RMySQL)
+library(DBI)
+library(lubridate)
+
+dbcon <- dbConnect(MySQL(),
+                   host="db",
+                   port=3306,
+                   user="test",
+                   password = "test123",
+                   dbname="test")
+
+query_1 = "SELECT * FROM test.confirmados"
+results_1 <- dbSendQuery(dbcon, query_1)
+confirmados <- dbFetch(results_1, n=-1)
+dbClearResult(results_1)
+
+# confirmados <- read.csv("confirmados.csv")
 
 listapaises <- unique(confirmados$pais)
 
@@ -39,9 +55,13 @@ shinyUI(fluidPage(
                               tabsetPanel(
                                 tabPanel("Global",
                                          plotlyOutput("total_graph"),
+                                         htmlOutput("global_total"),
+                                         textOutput("warning_global")
                                          ),
                                 tabPanel("By Country",
-                                         plotlyOutput("country_graph")
+                                         plotlyOutput("country_graph"),
+                                         htmlOutput("country_total"),
+                                         textOutput("warning_country")
                                          )
                               )
                               
@@ -69,6 +89,26 @@ shinyUI(fluidPage(
                      plotlyOutput("bubble")
                    )
                  )
-               )
+               ),
+               
+               # Tablas
+               tabPanel("Tables",
+                        sidebarLayout(
+                          sidebarPanel(
+                            radioButtons(
+                              "table_type",
+                              "Valor",
+                              choices = c("Casos Confirmados","Muertes","Recuperaciones"),
+                              selected = c("Casos Confirmados")
+                            ),
+                            selectInput('paises_table',
+                                        'Paises',
+                                        choices = listapaises,
+                                        selected = c("Guatemala"), multiple = FALSE),
+                            dateRangeInput("daterange", "Date range:",start = "2020-01-01")
+                            
+                          ),
+                          mainPanel(dataTableOutput("table"))
+                        ))
                )
 ))

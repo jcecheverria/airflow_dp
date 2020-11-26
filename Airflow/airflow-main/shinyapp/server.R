@@ -9,13 +9,13 @@
 
 library(shiny)
 library(plotly)
-library(leaflet)
 library(dplyr)
 library(RMySQL)
 library(DBI)
+library(lubridate)
 
 dbcon <- dbConnect(MySQL(),
-                   host="192.168.99.100",
+                   host="db",
                    port=3306,
                    user="test",
                    password = "test123",
@@ -23,20 +23,20 @@ dbcon <- dbConnect(MySQL(),
 
 query_1 = "SELECT * FROM test.confirmados"
 results_1 <- dbSendQuery(dbcon, query_1)
-confirmados <- dbFetch(results_1)
+confirmados <- dbFetch(results_1, n=-1)
 dbClearResult(results_1)
 
 
-query_1 = "SELECT * FROM test.muertos"
-results_1 <- dbSendQuery(dbcon, query_1)
-muertos <- dbFetch(results_1)
-dbClearResult(results_1)
+query_2 = "SELECT * FROM test.muertos"
+results_2 <- dbSendQuery(dbcon, query_2)
+muertos <- dbFetch(results_2, n=-1)
+dbClearResult(results_2)
 
 
-query_1 = "SELECT * FROM test.recuperados"
-results_1 <- dbSendQuery(dbcon, query_1)
-recuperados <- dbFetch(results_1)
-dbClearResult(results_1)
+query_3 = "SELECT * FROM test.recuperados"
+results_3 <- dbSendQuery(dbcon, query_3)
+recuperados <- dbFetch(results_3, n=-1)
+dbClearResult(results_3)
 
 
 # confirmados <- read.csv("confirmados.csv")
@@ -63,16 +63,6 @@ recuperados_countries <- recuperados %>%
 confirmados_total <- confirmados %>% group_by(date) %>% summarise(val = sum(val)) %>% ungroup()
 muertos_total <- muertos %>% group_by(date) %>% summarise(val = sum(val)) %>% ungroup()
 recuperados_total <- recuperados %>% group_by(date) %>% summarise(val = sum(val)) %>% ungroup()
-
-
-
-fig <- confirmados_total  %>% # filter(pais == "Guatemala") %>%
-    plot_ly(x=~date,y=~val, mode = 'lines', text = paste("days from today"))
-
-fig
-
-
-
 
 
 # Define server logic required to draw a histogram
@@ -168,6 +158,106 @@ shinyServer(function(input, output) {
         fig
     })
     
+    output$global_total <- renderUI({
+        
+        if(input$summary_type == "Casos Confirmados"){
+            summary_selected_df <- confirmados_total
+            titulo_summary <- "Global Confirmed"
+        }else if(input$summary_type=="Muertes"){
+            summary_selected_df <- muertos_total
+            titulo_summary <- "Global Deaths"
+        }else{
+            summary_selected_df <- recuperados_total
+            titulo_summary <- "Global Recovers"
+        }
+        
+        h1(paste("Casos Totales:",tail(summary_selected_df$val,1)))
+        
+    })
+    
+    output$country_total <- renderUI({
+        
+        if(input$summary_type == "Casos Confirmados"){
+            summary_country_selected_df <- confirmados_countries
+            titulo_summary_country <- "Country Confirmed"
+        }else if(input$summary_type=="Muertes"){
+            summary_country_selected_df <- muertos_countries
+            titulo_summary_country <- "Country Deaths"
+        }else{
+            summary_country_selected_df <- recuperados_countries
+            titulo_summary_country <- "Country Recovers"
+        }
+        
+        df_pais <- summary_country_selected_df %>% filter(pais == input$paises)
+        
+        h1(paste0("Casos Totales (",input$paises,"): ",tail(df_pais$val,1)))
+        
+    })
+    
+    output$warning_global <- renderText({
+        
+        if(input$summary_type == "Casos Confirmados"){
+            summary_selected_df <- confirmados_total
+            titulo_summary <- "Global Confirmed"
+        }else if(input$summary_type=="Muertes"){
+            summary_selected_df <- muertos_total
+            titulo_summary <- "Global Deaths"
+        }else{
+            summary_selected_df <- recuperados_total
+            titulo_summary <- "Global Recovers"
+        }
+        
+        paste("*Ultima fecha de actualizacion: ",tail(summary_selected_df$date,1))
+        
+    })
+    
+    output$warning_country <- renderText({
+        
+        if(input$summary_type == "Casos Confirmados"){
+            summary_country_selected_df <- confirmados_countries
+            titulo_summary_country <- "Country Confirmed"
+        }else if(input$summary_type=="Muertes"){
+            summary_country_selected_df <- muertos_countries
+            titulo_summary_country <- "Country Deaths"
+        }else{
+            summary_country_selected_df <- recuperados_countries
+            titulo_summary_country <- "Country Recovers"
+        }
+        
+        df_pais <- summary_country_selected_df %>% filter(pais == input$paises)
+        
+        paste("*Ultima fecha de actualizacion: ",tail(df_pais$date,1))
+        
+    })
+    
+    output$table <- renderDataTable({
+        
+        if(input$table_type=="Casos Confirmados"){
+            table_selected_df <- confirmados_countries
+            titulo_bubble <- "Confirmed per Country"
+        }else if(input$table_type=="Muertes"){
+            table_selected_df <- muertos_countries
+            titulo_bubble <- "Deaths per Country"
+        }else{
+            table_selected_df <- recuperados_countries
+            titulo_bubble <- "Recovered per Country"
+        }
+        
+        df_pais <- table_selected_df %>% filter(pais == input$paises_table)
+        
+        df_pais <- df_pais %>%
+                    filter(date >= (input$daterange[1])) %>%
+                    filter(date <= (input$daterange[2]))
+        
+        
+        df_pais %>% select(c("date","pais","val")) %>% rename(casos = val)
+        
+    },
+    options=list(
+        pageLength=13,
+        lengthChange=FALSE,
+        searching=FALSE
+    ))
     
 
 })
