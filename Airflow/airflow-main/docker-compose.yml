@@ -1,0 +1,83 @@
+version: '3.7'
+services:
+    postgres:
+        image: postgres:9.6
+        environment:
+            - POSTGRES_USER=airflow
+            - POSTGRES_PASSWORD=airflow
+            - POSTGRES_DB=airflow
+        logging:
+            options:
+                max-size: 10m
+                max-file: "3"
+
+    webserver:
+        build: .
+        restart: always
+        depends_on:
+            - postgres
+        environment:
+            - LOAD_EX=n
+            - EXECUTOR=Local
+        logging:
+            options:
+                max-size: 10m
+                max-file: "3"
+        volumes:
+            - ./data:/home/airflow/data
+            - ./dags:/usr/local/airflow/dags
+            # - ./plugins:/usr/local/airflow/plugins
+        ports:
+            - "8080:8080"
+        command: webserver
+        healthcheck:
+            test: ["CMD-SHELL", "[ -f /usr/local/airflow/airflow-webserver.pid ]"]
+            interval: 30s
+            timeout: 30s
+            retries: 3
+
+    db:
+        image: mysql:5.7
+        volumes:
+ #           - ./db_data:/var/lib/mysql
+             - ./script/schema.sql:/docker-entrypoint-initdb.d/1.sql
+        restart: always
+        ports:
+            - 3306:3306
+        environment:
+            MYSQL_ROOT_PASSWORD: test123
+            MYSQL_DATABASE: test
+            MYSQL_USER: test
+            MYSQL_PASSWORD: test123
+    
+    shiny:
+        container_name: shiny
+        depends_on:
+            - db
+            - webserver
+        # To build the image locally, comment out "image" below, and uncomment
+        # "build" and the lines indented under it.
+        #image: rocker/shiny
+        build:
+          context: .
+          dockerfile: ./shiny_docker/Dockerfile
+        restart: always
+        # Setting this to something other than 'root' will cause shiny apps not to
+        # run on the localhost:80 "Welcome to Shiny" diagnostics page mentioned
+        # below.
+        user: 'root'
+        # Uncomment the lines below to disable application logs STDOUT output
+        environment:
+           - APPLICATION_LOGS_TO_STDOUT=false
+        ports:
+          - '80:3838'
+        volumes:
+        #  - 'shiny_logs:/var/log/shiny-server'
+          - "./shinyapp:/srv/shiny-server/"
+          # Comment the line below out for initial testing. With it commented out,
+          # going to localhost:80 in one's web browser will show a "Welcome to
+          # Shiny Server!" diagnostics page.
+          # - './mountpoints/apps:/srv/shiny-server'
+            
+        
+        
